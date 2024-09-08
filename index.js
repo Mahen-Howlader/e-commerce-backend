@@ -2,6 +2,7 @@ const express = require("express")
 const cors = require("cors")
 const { ObjectId } = require("mongodb");
 const app = express();
+var jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 require("dotenv").config()
 const corsOptions = {
@@ -39,6 +40,14 @@ async function run() {
   try {
     const allProduct = client.db("ecommerces").collection("products");
     const userCollection = client.db("ecommerces").collection("user");
+
+    app.post("/jwt", async (req, res) => {
+      const user = req?.body;
+      const token = jwt.sign(user,process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.send({token})
+
+    })
+
 
     app.get("/populardata", async (req, res) => {
       const { sort } = req?.query;
@@ -144,21 +153,22 @@ async function run() {
     })
 
     app.post("/user", async (req, res) => {
-      console.log(req?.body)
+      console.log(req?.body);
       const user = req?.body;
       const email = user?.email;
-
-      const query = {
-        email: email
-      };
+  
+      const query = { email: email };
       const queryResult = await userCollection.findOne(query);
+      
       if (queryResult) {
-        return req.send({ message: "User already exist", insertedId: null })
+          // Corrected: use `res.send` instead of `req.send`
+          return res.send({ message: "User already exists", insertedId: null });
       }
-
-      const result = await userCollection.insertOne(user)
-      res.send(result)
-    })
+  
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+  });
+  
 
 
     app.patch(`/rolechange/admin/:email`, async (req, res) => {
