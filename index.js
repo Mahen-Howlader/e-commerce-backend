@@ -41,13 +41,52 @@ async function run() {
     const allProduct = client.db("ecommerces").collection("products");
     const userCollection = client.db("ecommerces").collection("user");
 
-    app.post("/jwt", async (req, res) => {
-      const user = req?.body;
-      const token = jwt.sign(user,process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
-      res.send({token})
+    // middleware start
+    const verifyToken = (req, res, next) => {
+      if (!req?.headers?.authorization) {
+        return res.status(401).send({ message: "forbidden access" })
+      };
+      const token = req.headers.authorization.split(" ")[1];
 
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, function (err, decoded) {
+        // console.log(decoded)
+        if (err) {
+          return res.status(401).send({ message: "forbidden access" })
+        };
+        req.decoded = decoded;
+        next();
+      });
+      // next()
+    }
+    const verifyAdmin = async (req,res,next) => {
+      const email = req.decoded.emial;
+      const query = {email : email};
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if(!isAdmin){ return res.status(403).send({message : "Forbidden access" }) }
+      next()
+    }
+    // middleware end
+    app.get(`/user/admin/:email`, verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const decodedEmail = req.decoded.emial;
+      // console.log(email,decodedEmail)
+      if (email !== decodedEmail) {
+        return res.status(403).send({ message: "Unauthorized access" })
+      };
+      const query = {email : email};
+      const user = await userCollection.findOne(query);
+      console.log(user)
+      res.send(user)
+  
     })
 
+    app.post("/jwt", async (req, res) => {
+      const user = req?.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.send({ token })
+
+    })
 
     app.get("/populardata", async (req, res) => {
       const { sort } = req?.query;
@@ -60,7 +99,6 @@ async function run() {
     })
     app.get("/kidscollection", async (req, res) => {
       const { filter } = req?.query;
-      // console.log(req?.query)
       const page = parseInt(req?.query?.page);
       const size = parseInt(req?.query?.size);
       const sort = req?.query?.sort;
@@ -80,7 +118,6 @@ async function run() {
         const result = await AllData.toArray();
         res.send({ result, count });
       } catch (error) {
-        console.error("Error fetching data:", error);
         res.status(500).send("Internal Server Error");
       }
     })
@@ -95,7 +132,6 @@ async function run() {
         }
         res.send(result);
       } catch (error) {
-        console.error(error);
         res.status(500).send({ message: "Internal server error" });
       }
     })
@@ -116,7 +152,6 @@ async function run() {
 
         res.send(result);
       } catch (error) {
-        console.error(error);
         res.status(500).send({ message: "Internal server error" });
       }
     })
@@ -131,17 +166,15 @@ async function run() {
         }
         res.send(result);
       } catch (error) {
-        console.error(error);
         res.status(500).send({ message: "Internal server error" });
       }
     })
 
-    app.get("/user", async (req, res) => {
+    app.get("/user", verifyToken,verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
       res.send(result)
     })
     app.delete("/user/:id", async (req, res) => {
-      console.log(req.body)
 
       const id = req?.params?.id;
       const query = {
@@ -153,23 +186,20 @@ async function run() {
     })
 
     app.post("/user", async (req, res) => {
-      console.log(req?.body);
       const user = req?.body;
       const email = user?.email;
-  
+
       const query = { email: email };
       const queryResult = await userCollection.findOne(query);
-      
+
       if (queryResult) {
-          // Corrected: use `res.send` instead of `req.send`
-          return res.send({ message: "User already exists", insertedId: null });
+        // Corrected: use `res.send` instead of `req.send`
+        return res.send({ message: "User already exists", insertedId: null });
       }
-  
+
       const result = await userCollection.insertOne(user);
       res.send(result);
-  });
-  
-
+    });
 
     app.patch(`/rolechange/admin/:email`, async (req, res) => {
       try {
@@ -198,6 +228,8 @@ async function run() {
         res.status(500).send({ success: false, message: "Server error while updating user role." });
       }
     });
+
+
 
 
 
